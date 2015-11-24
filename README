@@ -1,0 +1,34 @@
+"coda" stands for CO(re) D(ump) A(nalyzer) or C(ore) O(bject) D(ebugger) and A(nalyzer).
+This tool probes Linux-x86_64 coredumps in batch mode as well as interactively.
+coredump has to be full(not a data/stack segment dump only).
+If the coredump is not full, backtraces will be curtailed.
+This tool does not require binaries, only full core dump is required.
+
+Architecture supported
+-----------------------
+compile on x86_64 Linux box.
+
+How to enable full coredump in linux
+------------------------------------
+On bash prompt
+
+$> cat /proc/$$/coredump_filter 
+00000033
+
+$> echo 0x7f > /proc/$$/coredump_filter 
+$> cat /proc/$$/coredump_filter 
+0000007f
+
+For furter info 'man core'.
+
+help
+----
+$> ./coda
+Argument Missing, provide (corefile)
+Usage: ./coda <options> corefile
+options:
+ -B Backtrace all
+ -m Show, if mini-coredump
+ -d Enable de-mangling
+ -i Interactive mode
+
