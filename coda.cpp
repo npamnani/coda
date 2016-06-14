@@ -1,4 +1,9 @@
 //writer nishant.pamnani@gmail.com
+
+
+#define PACKAGE "coda"
+#define PACKAGE_VERSION "1.0"
+
 #include "coda.h"
 #include "coda_ehframe.h"
 #include <dis-asm.h>
@@ -25,7 +30,8 @@ CoreObject::CoreObject(char const *cfname):m_corefile(cfname),
                                            m_current_thread(1),
                                            m_pthreads(false),
                                            m_demangle(false),
-                                           m_interactive_mode(false)
+                                           m_interactive_mode(false),
+                                           m_found_nt_file(false)
 {
   m_corefile >> m_core_ehdr;
   if (!ElfHdr(m_core_ehdr))
@@ -38,8 +44,53 @@ CoreObject::CoreObject(char const *cfname):m_corefile(cfname),
   ExtractPhdrs();
   ExtractProcessVitals();
   ExtractSharedLibraries();
+  Process_NT_FILE_Note();
 }
 
+void
+CoreObject::Process_NT_FILE_Note()
+{
+  if(!m_found_nt_file)
+  {
+    return;
+  }
+
+  char *cptr = m_nt_file_sec;
+  long count = *(long*)cptr;
+  long pgsize = *(long*)(cptr + sizeof(long)); 
+
+
+  std::vector<nt_file_element> v_nt_file_elem(count);
+  std::vector<char*> v_filename(count);
+
+  cptr += 2 * sizeof(long); 
+  for (long ndx = 0; ndx < count; ++ndx, cptr += sizeof(nt_file_element))
+  {
+    v_nt_file_elem[ndx] = *(nt_file_element*)cptr;
+  }
+ 
+  for (long ndx = 0; ndx < count; ++ndx)
+  {
+    v_filename[ndx] = cptr;
+    while (*cptr++ != '\0');
+  }
+  
+  for (long ndx =0; ndx < count; ++ndx)
+  {
+    SetOrModifySegmentName(v_nt_file_elem[ndx].start,v_filename[ndx]);
+  }
+ 
+}
+
+void
+CoreObject::SetOrModifySegmentName(uint64_t va, const char *segname)
+{
+  ObjectEntry *oe = FindObjectEntry(va);
+
+  if (!oe)
+    return;
+  oe->filename = segname;
+}
 
 void 
 CoreObject::WelcomeMessage()
@@ -194,8 +245,8 @@ CoreObject::SetSegmentName(uint64_t va, uint64_t ba, const char *libname)
   oe->hashtab     = oe2->hashtab = va_hashtab;
   oe->strtab_size = oe2->strtab_size = strtab_size;
   oe->base_addr   = oe2->base_addr = ba;
-  oe2->filename += libname;
-  oe->filename += libname;
+  oe2->filename = libname;
+  oe->filename = libname;
 }
 
 uint64_t 
@@ -244,8 +295,8 @@ CoreObject::ExtractDT_DEBUG(uint64_t ba, uint64_t va)
   oe->hashtab     = oe2->hashtab = va_hashtab;
   oe->strtab_size = oe2->strtab_size = strtab_size;
   oe->base_addr = oe2->base_addr = ba;
-  oe2->filename += m_progname;
-  oe->filename += m_progname;
+  oe2->filename = m_progname;
+  oe->filename = m_progname;
   return va_to_return;
 }
 
@@ -288,7 +339,8 @@ CoreObject::ExtractProcessVitals()
     }
     else if (NT_PRPSINFO == nhdr->n_type || NT_PSINFO == nhdr->n_type) 
     {
-      m_progname =  cptr
+      m_progname 
+                 =  cptr
                  + sizeof(ElfW(Nhdr))
                  + newnamesize
                  + offset_of(struct elf_prpsinfo, pr_fname);
@@ -300,7 +352,11 @@ CoreObject::ExtractProcessVitals()
       m_pr_ctx.m_prinfo = reinterpret_cast<elf_prpsinfo*>
                       (cptr + sizeof(ElfW(Nhdr)) + newnamesize);
     } 
-
+    else if (NT_FILE == nhdr->n_type)
+    {
+      m_nt_file_sec = cptr + sizeof(ElfW(Nhdr)) + newnamesize;
+      m_found_nt_file = true;
+    }
     cptr += sizeof(ElfW(Nhdr)) + newnamesize + descnamesize;
   }
 }
@@ -331,16 +387,16 @@ CoreObject::ExtractPhdrs()
       ObjectEntry *tmp = new ObjectEntry; 
 
       if ((phdr_arr->p_flags & (PF_R | PF_W)) == (PF_R | PF_W))
-        tmp->filename = "[RW ";
+        tmp->access= "[RW ";
       else if (phdr_arr->p_flags & PF_R)
-        tmp->filename = "[RO ";
+        tmp->access = "[RO ";
       else 
-        tmp->filename = "[Non-Readable ";
+        tmp->access = "[Non-Readable ";
 
       if (phdr_arr->p_flags & PF_X)
-        tmp->filename += "TEXT]:";
+        tmp->access += "TEXT]:";
       else 
-        tmp->filename += "DATA]:";
+        tmp->access += "DATA]:";
 
       tmp->phdr = phdr_arr;
       tmp->symtab = 0;
@@ -526,7 +582,7 @@ CoreObject::Addr2Name(uint64_t va, std::string &symname)
   rc = FindSymbol(oe,va,symname);
 out:
   if (PART_SUCCESS == rc)
-    symname = oe->filename;
+    symname = oe->access + oe->filename;
   return rc;
 }
 
@@ -568,12 +624,12 @@ CoreObject::FindSymbol(ObjectEntry *oe, uint64_t va, std::string &symname)
       {
         symname = demangled_name;
         free(demangled_name);
-        symname += offset + oe->filename;
+        symname += offset + oe->access + oe->filename;
         return SUCCESS;
       }
     }
     symname = std::string(&strtab[symtab[mid].st_name])  
-             + offset + oe->filename;
+             + offset + oe->access + oe->filename;
     return SUCCESS;
   } 
   return PART_SUCCESS;
@@ -588,11 +644,10 @@ CoreObject::ShowMemoryMap()
     std::cout  
       << "0x" << std::hex << m_object_map[ndx]->phdr->p_vaddr
       << " - 0x" << std::hex << m_object_map[ndx]->phdr->p_vaddr 
-                              + m_object_map[ndx]->phdr->p_memsz - 1
-      << " " << m_object_map[ndx]->filename
+                              + m_object_map[ndx]->phdr->p_memsz
+      << " " << m_object_map[ndx]->access + m_object_map[ndx]->filename
       << std::endl;
-    if (Paginate(m_interactive_mode,++linecount))
-      break;    
+    Paginate(m_interactive_mode,++linecount);
   }
 }
 
@@ -713,8 +768,7 @@ void start_disassembly(uint64_t start_va,
       break;
     }
     std::cout << std::endl;
-    if (Paginate(interactive_mode,++linecount))
-      break;    
+    Paginate(interactive_mode,++linecount);
     va += size;
   }
 }

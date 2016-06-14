@@ -5,7 +5,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <errno.h>
 #include <link.h>
 #include <sys/procfs.h>
@@ -22,7 +21,7 @@
 #define LIB_NAME_LEN 2048
 #define CURRENT_THREAD  0xffffffff
 
-inline int Paginate(bool imode, int linecount)
+inline void Paginate(bool imode, int linecount)
 {
   if (imode)
   {
@@ -37,7 +36,6 @@ inline int Paginate(bool imode, int linecount)
       }
     }
   }
-  return 0;
 }
 
 enum RetCode {
@@ -52,6 +50,7 @@ class CoreObject {
 
   public: // structs
     struct ObjectEntry {
+      std::string access;
       std::string filename;
       ElfW(Phdr) *phdr;
       uint64_t symtab;
@@ -134,6 +133,16 @@ class CoreObject {
     RetCode FindSymbol(ObjectEntry *oe, uint64_t va, std::string &symname);
     void PrintBT(const user_regs_struct *urs);
     void WelcomeMessage();
+    void Process_NT_FILE_Note();
+    void SetOrModifySegmentName(uint64_t va, const char *segname);
+
+  private: // structs
+    struct nt_file_element {
+      unsigned long start;
+      unsigned long end;
+      unsigned long pgoff;
+    };
+
   private: //data members
 
     File m_corefile; 
@@ -144,11 +153,13 @@ class CoreObject {
     uint64_t m_aux_phdr_va;
     char *m_progname;
     char *m_commandline;
+    char *m_nt_file_sec;
     unsigned m_current_thread;
     bool m_pthreads;
     bool m_mini_dump;
     bool m_demangle;
     bool m_interactive_mode;
+    bool m_found_nt_file;
 };
  
 template <typename T>
