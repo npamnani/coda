@@ -3,6 +3,7 @@
 
 #define PACKAGE "coda"
 #define PACKAGE_VERSION "1.0"
+#define MIN_STR_SIZE 4
 
 #include "coda.h"
 #include "coda_ehframe.h"
@@ -862,4 +863,105 @@ CoreObject::ShowIfMinidump()
   {
     std::cout << "Full core dump" << std::endl;
   }
+}
+
+int 
+CoreObject::ShowStrings(char *regex)
+{
+  regex_t reg;
+  int r;
+
+  if (regex != NULL && (r = regcomp(&reg, regex, REG_NOSUB|REG_EXTENDED)))
+  {
+    char errbuf[256];
+    regerror(r, &reg, errbuf, sizeof(errbuf));
+    std::cout << "RegEx ERROR:" << errbuf << std::endl;
+    return 1;
+  }
+
+  return ExtractStringsFromCoredump(regex? &reg : NULL);
+}
+
+static inline
+int pattern_matched(regex_t *reg, char *str)
+{
+  if (!reg || regexec(reg, str, 0, NULL, 0) != REG_NOMATCH)
+    return 1;
+  return 0;
+}
+
+int
+CoreObject::ExtractStringsFromCoredump(regex_t *reg)
+{
+
+  char s_buff[8192];
+  static char *d_buff =  (char*)malloc(1 * 1024 * 1024);
+  off_t start = 0; 
+  off_t end = m_corefile.Size(); 
+  off_t min_str_size = 0;
+  int readsize = 8192;
+  int s_idx = 0;
+  int d_idx = 0;
+  int lines = 0;
+  int write_size = reg?(1024*1024):8192;
+  bool new_line = false;
+
+  if (end == -1)  
+  {
+    std::cout << "Not able to determine core file size." << std::endl;
+    return 1;
+  }
+    
+  m_corefile >> File::Offset(0);
+  while(1)
+  {
+    bool break_loop = false;
+    if ((end - start) < readsize) {
+      readsize = end - start;
+      break_loop = true;
+    }
+    m_corefile >> File::Units(readsize)>> s_buff;
+    start += readsize;
+    s_idx = 0;
+    while(s_idx < readsize)
+    {
+      if (isprint(s_buff[s_idx]) || isblank(s_buff[s_idx]))
+      {
+        d_buff[d_idx++] =  s_buff[s_idx];
+        min_str_size++;
+      }
+      else if (min_str_size < MIN_STR_SIZE)
+      {
+        d_idx -= min_str_size;
+        min_str_size = 0;
+      }
+      else {
+        d_buff[d_idx++] = '\n';
+        new_line = true;
+        min_str_size = 0;
+      }
+
+      if ((d_idx == (write_size-1)) || new_line)
+      {
+        new_line = false;
+        d_buff[d_idx] = '\0';
+        if(pattern_matched(reg,d_buff))
+        {
+          std::cout << d_buff;
+          Paginate(m_interactive_mode,++lines);
+        }
+        d_idx = 0;
+      }
+      ++s_idx;
+    }
+    if (break_loop)
+      break;
+  }
+  if (d_idx)
+  {
+    d_buff[d_idx] = '\0';
+    if(pattern_matched(reg,d_buff))
+      std::cout << d_buff;
+  }
+  return 0;
 }

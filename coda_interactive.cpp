@@ -118,6 +118,12 @@ int command_demangle(CoreObject* co, int argc, char** argv)
     std::cout << "Invalid argument" << std::endl;
     return 1;
   }
+  else if (argc < 1)
+  {
+    std::cout << "Argument missing" << std::endl;
+    return 1;
+  }
+
   if (strcmp(argv[0],"1") == 0)
   {
     co->EnableDemangle();
@@ -167,6 +173,19 @@ int command_threads(CoreObject* co, int argc, char**)
   }
   co->ShowThrList();
   return 0;
+}
+
+int command_strings(CoreObject* co, int argc, char**argv)
+{
+  if (argc > 1)
+  {
+    std::cout << "Invalid argument" << std::endl;
+    return 1;
+  }
+  
+  char *regex = argv[0];
+  return co->ShowStrings(regex);
+  
 }
 
 int handle_arguments(int argc, char**argv,uint64_t *paddr, size_t *punits)
@@ -284,6 +303,9 @@ command_struct cmds[] = {
            "thread <number>." },
   { "threads", command_threads,   
            "Show all threads." },
+  { "strings", command_strings,   
+           "Extract strings from coredump under probe."
+           "\n\t\tUsage: strings <pattern>" },
   { "xuint" ,  command_xuint, 
            "Extract unsigned int." 
            "\n\t\tUsage: xuint addr <count>" },
@@ -337,7 +359,7 @@ void handle_input(CoreObject *co, std::string &line)
   for( ;argc < MAX_ARGS - 1; ++argc,str = NULL)
   {
     char *saveptr;
-    argv[argc] = strtok_r(str," \t",&saveptr);
+    argv[argc] = coda_strtok(str,&saveptr);
     if (argv[argc] == NULL)
       break;
   }

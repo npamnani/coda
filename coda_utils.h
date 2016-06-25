@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <stdexcept>
+#include <iostream>
 
 class Done: public std::exception {
   public:
@@ -96,6 +97,13 @@ class File {
       return *this;
     }
 
+    off_t Size() const
+    {
+      struct stat sbuff;
+      if (fstat(m_fd, &sbuff) < 0)
+        return -1;
+      return sbuff.st_size;
+    }
   private:
 
     std::string m_fname;
@@ -149,4 +157,64 @@ class Stack{
     unsigned _capacity;
     unsigned _size;
 };
+
+inline void Paginate(bool imode, int linecount)
+{
+  if (imode)
+  {
+    if(18 == linecount % 19)
+    {
+      std::cout << "Type q to quit:";
+      std::string line;
+      std::getline (std::cin,line);
+      if ('q' == line[0])
+      {
+        throw Done("done");
+      }
+    }
+  }
+}
+
+static inline
+char *coda_strtok(char *str,char **saveptr)
+{
+
+  char *lstr = str?str:*saveptr;
+  char *start = *lstr ? lstr:NULL;
+  int quote_on = 0;
+  int encountered_delim = 0;
+  while(*lstr != '\0')
+  {
+    if (!quote_on && (*lstr == ' ' || *lstr == '\t'))
+    {
+        *lstr = '\0';
+        encountered_delim = 1;
+    }
+    else if (*lstr == '\'' && !encountered_delim)
+    {
+      if ( !quote_on )
+      {
+        quote_on = 1;
+        start = lstr + 1;
+      }
+      else
+      {
+        quote_on = 0;
+        *lstr = '\0';
+        encountered_delim = 1;
+      }
+    }
+    else if (encountered_delim)
+      break;
+    ++lstr;
+  }
+  if (quote_on)
+  {
+    printf("quote not closed\n");
+    return NULL;
+  }
+  *saveptr = lstr;
+  return start;
+}
+
 #endif

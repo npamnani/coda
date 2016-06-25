@@ -9,34 +9,17 @@
 #include <link.h>
 #include <sys/procfs.h>
 
-#include <iostream>
 #include <string>
 #include <vector>
 #include <iomanip>
 #include <typeinfo>
+#include <regex.h>
 
 #include "coda_utils.h"
 
 #define offset_of(TYPE,mem)       (unsigned long)(&((TYPE*)0)->mem)
 #define LIB_NAME_LEN 2048
 #define CURRENT_THREAD  0xffffffff
-
-inline void Paginate(bool imode, int linecount)
-{
-  if (imode)
-  {
-    if(24 == linecount % 25)
-    {
-      std::cout << "Type q to quit:";
-      std::string line;
-      std::getline (std::cin,line);
-      if ('q' == line[0])
-      {
-        throw Done("done");
-      }
-    }
-  }
-}
 
 enum RetCode {
   SUCCESS = 0,
@@ -79,6 +62,7 @@ class CoreObject {
     void ShowBTAll();
     void ShowIfMinidump();
     void SwitchToThread(size_t thrno = CURRENT_THREAD);
+    int  ShowStrings(char *regex);
     void EnableDemangle() {m_demangle = true;}
     void DisableDemangle() {m_demangle = false;}
     bool IsMiniDump() {return m_mini_dump;}
@@ -135,6 +119,7 @@ class CoreObject {
     void WelcomeMessage();
     void Process_NT_FILE_Note();
     void SetOrModifySegmentName(uint64_t va, const char *segname);
+    int ExtractStringsFromCoredump(regex_t *reg);
 
   private: // structs
     struct nt_file_element {
