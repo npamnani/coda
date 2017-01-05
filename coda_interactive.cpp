@@ -9,8 +9,8 @@
 #include <string>
 
 #include "coda.h"
+#include "coda_readline.h"
 
-sigjmp_buf env;
 typedef int (*COMMAND)(CoreObject*,int,char**);
 
 struct command_struct{
@@ -342,20 +342,12 @@ COMMAND command(char *cmd)
   return cmds[ndx].command;
 }
 
-void sig_handler(int)
-{
-  std::cout << std::endl;
-  siglongjmp(env,1);
-}
-
-void handle_input(CoreObject *co, std::string &line)
+void handle_input(CoreObject *co, char *str)
 {
   const int MAX_ARGS = 10 + 1;
-  char *str;
   int   argc = 0;
   char *argv[MAX_ARGS] = {0};
 
-  str = (char*)line.c_str(); 
   for( ;argc < MAX_ARGS - 1; ++argc,str = NULL)
   {
     char *saveptr;
@@ -374,23 +366,47 @@ void
 CoreObject::Switch2InteractiveMode()
 {
   std::string line;
-
+  bool notty = false;
   m_interactive_mode = true;
-  WelcomeMessage();
-  signal(SIGINT,sig_handler);
-  sigsetjmp(env,1);
+  signal(SIGINT, SIG_IGN);
 
-  while (std::cout << "coda > ",std::getline (std::cin,line))
+  if (!isatty(fileno(stdin)) || !isatty(fileno(stdout)))
   {
-    if (std::cin.eof())
-      break;
+    notty = true;
+    m_interactive_mode = false;
+  }
+
+  if (m_interactive_mode)
+  {
+    WelcomeMessage();
+  }
+  while (1)
+  {
+    char *str;
+    if (notty)
+    {
+      std::getline(std::cin,line);
+      if (std::cin.eof())
+        break;
+      str = (char*)line.c_str(); 
+    }
+    else 
+    {
+      str = coda_readline("coda > ");
+      if (str == NULL)
+        break;
+      coda_add_history(str);
+    }
+
     try 
     {
-      handle_input(this, line);
+      handle_input(this, str);
     }
     catch (Done &done)
     {
     }
+    if (!notty)
+      free(str);
   }
   std::cout << std::endl;
   exit(0);
