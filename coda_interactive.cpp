@@ -362,6 +362,29 @@ void handle_input(CoreObject *co, char *str)
 
 }
 
+char const* cmd_completer(char const *str_to_com, int str_len, int init)
+{
+
+  static command_struct *traverse = &cmds[0];
+
+  if (NULL == str_to_com)
+    return NULL;
+
+  if (init)
+    traverse = &cmds[0];
+
+  while (traverse->command != command_invalid)
+  {
+    if (!strncmp(traverse->command_name, str_to_com, str_len))
+    {
+      return traverse++->command_name;
+    }
+    ++traverse;
+  }
+
+  return NULL;
+}
+
 void
 CoreObject::Switch2InteractiveMode()
 {
@@ -378,8 +401,10 @@ CoreObject::Switch2InteractiveMode()
 
   if (m_interactive_mode)
   {
+    set_completer(cmd_completer);
     WelcomeMessage();
   }
+
   while (1)
   {
     char *str;

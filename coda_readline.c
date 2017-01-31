@@ -3,9 +3,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 
 #define LINE_LEN  1024
-#define MAX_HIST_SIZE 1000
+#define MAX_HIST_SIZE 2000
 
 struct termios saved;
 static char line[LINE_LEN];
@@ -31,9 +32,9 @@ struct history_struct {
 
 struct dlist dummy_node;
 static struct history_struct history = {
-                                        .max_size = 100,
-                                        .start.next = &dummy_node,
-                                        .end.prev = &dummy_node
+                                         .max_size = 500,
+                                         .start.next = &dummy_node,
+                                         .end.prev = &dummy_node
                                        };
 
 struct dlist dummy_node = {
@@ -42,6 +43,16 @@ struct dlist dummy_node = {
                             .line = dummy_line
                           };
 static struct dlist *last_node = &dummy_node;
+
+typedef char const* (*completer_type)(char const *str_to_com, int str_len, int init);
+
+static completer_type completer;
+static int completer_pass = 1;
+
+void set_completer(completer_type cmp)
+{
+  completer = cmp;
+}
 
 static inline void del_nodes(int count)
 {
@@ -86,38 +97,38 @@ static void add_node(char *str)
 
 static int termsetup()
 {
-	struct termios term;
-	if(tcgetattr(fileno(stdin), &term) < 0) {
-		perror("Error getting terminal information");
-		exit(1);
-	}
+  struct termios term;
+  if(tcgetattr(fileno(stdin), &term) < 0) {
+    perror("Error getting terminal information");
+    exit(1);
+  }
   saved = term; 
 
-	term.c_lflag &= ~ICANON;
-	term.c_lflag &= ~ECHO;
-	term.c_lflag |= ISIG;
-	term.c_cc[VMIN]=1;
-	term.c_cc[VTIME]=0;
-	term.c_cc[VINTR]=0;
-	term.c_cc[VQUIT]=0;
+  term.c_lflag &= ~ICANON;
+  term.c_lflag &= ~ECHO;
+  term.c_lflag |= ISIG;
+  term.c_cc[VMIN]=1;
+  term.c_cc[VTIME]=0;
+  term.c_cc[VINTR]=0;
+  term.c_cc[VQUIT]=0;
 
-	if(tcsetattr(fileno(stdin), TCSANOW, &term) < 0) {
-		perror("Error setting terminal information");
-		return 1;
-	}
+  if(tcsetattr(fileno(stdin), TCSANOW, &term) < 0) {
+    perror("Error setting terminal information");
+    return 1;
+  }
   return 0;
 }
 
 static int termrestore()
 {
-	if(tcsetattr(fileno(stdin), TCSANOW, &saved) < 0) {
-		perror("Error setting terminal information");
-		return 1;
-	}
+  if(tcsetattr(fileno(stdin), TCSANOW, &saved) < 0) {
+    perror("Error setting terminal information");
+    return 1;
+  }
   return 0;
 }
 
-static void write_stdout(char *str, int end)
+static void write_stdout(const char *str, int end)
 {
   if (end < 0)
     end = 0;
@@ -236,8 +247,13 @@ static char* coda_getline(const char *prompt)
     memcpy(line, rl_prmpt, prmt_len);
     write_stdout(line, 0);
 
-	  do {
-	  	key=getchar();
+    do {
+      key=getchar();
+
+      if (key != 9)
+      {
+        completer_pass = 1;
+      }
     
       switch(key)
       {
@@ -322,6 +338,72 @@ static char* coda_getline(const char *prompt)
           write_stdout(NULL, str_len - cur_idx);
           break;
         }
+        case 9:
+        {
+          struct winsize window_size;
+          int new_line = 1;
+          const char *ret_str, *last_str;
+          int init = 1;
+          int count = 0;
+          int cols;
+
+          if (!completer)
+            break;
+          
+          if (ioctl(fileno(stdout), TIOCGWINSZ, &window_size) < 0)
+            window_size.ws_col = 0;
+          cols = window_size.ws_col;
+   
+          while((ret_str = completer(line + prmt_len, cur_idx - prmt_len, init && init--)) != NULL)
+          {
+            if (completer_pass != 1)
+            {
+              int slen = strlen(ret_str);
+
+              if (new_line || (cols < slen)) 
+              {
+                putc('\n', stdout);
+                cols = window_size.ws_col;
+                new_line = 0;
+              }
+
+              write_stdout(ret_str, 0);
+              fprintf(stdout, "  ");
+
+              if (cols < (slen + 2))
+              {
+                new_line = 1; 
+              }
+              else
+                cols = cols - (slen + 2);
+            }
+            last_str = ret_str;
+            ++count;
+          }
+
+          if (completer_pass > 1)
+          {
+            putc('\n', stdout);
+            write_stdout(line, 0);
+            write_stdout(NULL, str_len - cur_idx);
+          }
+
+          if (count == 1)
+          {
+            int len = strlen(last_str);
+            memcpy(line + prmt_len + len, line + cur_idx, str_len - cur_idx);
+            str_len = prmt_len + len + str_len - cur_idx;
+            line[str_len + 1] = 0;
+            memcpy(line + prmt_len, last_str, len);
+            write_stdout(line + prmt_len, cur_idx - prmt_len);
+            cur_idx = prmt_len + len;
+            write_stdout(NULL, str_len - cur_idx);
+          }
+          else if (count > 1)
+            ++completer_pass;
+
+          break;
+        }
         default:
         {
           if (iscntrl(key))
@@ -340,7 +422,7 @@ static char* coda_getline(const char *prompt)
           }
         }
       }
-	  } while(1);
+    } while(1);
 }
 
 char* coda_readline(const char *prompt)
@@ -349,7 +431,7 @@ char* coda_readline(const char *prompt)
 
   if (!isatty(fileno(stdin)) || !isatty(fileno(stdout)))
   {
-		perror("coda_readline: Not a terminal");
+    perror("coda_readline: Not a terminal");
     return NULL;
   }
 
@@ -365,7 +447,7 @@ char* coda_readline(const char *prompt)
     memcpy(new_mem, rline + prmt_len, str_len - prmt_len);
     new_mem[str_len - prmt_len] = 0;
     rline = new_mem;
-	}
+  }
   return rline;
 }
 
