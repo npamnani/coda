@@ -393,11 +393,12 @@ static char* coda_getline(const char *prompt)
             int len = strlen(last_str);
             memcpy(line + prmt_len + len, line + cur_idx, str_len - cur_idx);
             str_len = prmt_len + len + str_len - cur_idx;
-            line[str_len + 1] = 0;
+            line[str_len] = 0;
             memcpy(line + prmt_len, last_str, len);
             write_stdout(line + prmt_len, cur_idx - prmt_len);
             cur_idx = prmt_len + len;
             write_stdout(NULL, str_len - cur_idx);
+            memcpy(dummy_node.line, line + prmt_len, str_len);
           }
           else if (count > 1)
             ++completer_pass;

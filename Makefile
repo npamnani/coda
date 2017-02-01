@@ -16,6 +16,6 @@ coda: $(OBJS) $(INCLUDES) Makefile
 	g++ -o $@ $(OBJS) /usr/local/lib/libopcodes.a
 
 clean:
-	-rm -f coda 
+	-rm -f coda $(OBJS)
 
 .INTERMEDIATE: $(OBJS)
