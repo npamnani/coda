@@ -180,7 +180,7 @@ class EHFrame {
     FrameInfo* FindFrameInfo(uint64_t va);
   private: //methods
     typedef CoreObject::ObjectEntry ObjectEntry;
-    void PrintFrame(ArcReg *regs, int fnum, FrameInfo *fi);
+    void PrintFrame(ArcReg *regs, int fnum, FrameInfo *fi, int va_adjusted = 0);
     void AdjustTopFrame(ArcReg *regs, int *pfnum);
     void InterpretCFInstructions(Activation*, FrameInfo*);
     bool GetPreviousFrame(int, FrameInfo*);
@@ -215,3 +215,4 @@ class EHFrame {
 
 typedef Stack<uint64_t> DWOpStk;
 #endif
+

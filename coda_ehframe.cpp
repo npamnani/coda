@@ -71,12 +71,12 @@ CopyArchRegs(const user_regs_struct *urs, ArcReg *oregs)
 }
 
 void 
-EHFrame::PrintFrame(ArcReg *regs, int fnum, FrameInfo *fi)
+EHFrame::PrintFrame(ArcReg *regs, int fnum, FrameInfo *fi, int va_adjusted)
 {
  
   int linecount = 0; 
   std::string symname;
-  RetCode rc = CoreObject::GetCoreObject().Addr2Name(regs[RAR], symname);
+  RetCode rc = CoreObject::GetCoreObject().Addr2Name(regs[RAR] + va_adjusted, symname);
 
   if (m_regs)
   {
@@ -176,7 +176,7 @@ retry:
     //Warn user about it
       fprintf(stdout,"WARNING!!! Unable to unwind further, possible"
                     " stack overflow.\n");
-      fprintf(stdout,"STACK OVERFLOW: consider enabling stack protector.\n");
+      fprintf(stdout,"STACK BUFFER OVERFLOW: consider enabling stack protector.\n");
       regs[RAR] = 0;
     } else
     //This might happen if control tried to jump to invalid location.
@@ -218,6 +218,7 @@ EHFrame::PrintBT(const user_regs_struct *urs)
   do 
   {
     uint64_t va = oregs[RAR];
+    int va_adjusted = 0;
     if (0 == va) {
       break;
     }
@@ -231,12 +232,16 @@ EHFrame::PrintBT(const user_regs_struct *urs)
         ;// do nothing
       else if (va == fi->pc)
       {
-        fi = FindFrameInfo(va-1);
-        va = va -1;
+        fi = FindFrameInfo(va = va-1);
+        va_adjusted = -1;
       }
+    } else if (NULL == fi)
+    {
+      fi = FindFrameInfo(va = va-1);
+      va_adjusted = -1;
     }
 
-    PrintFrame(oregs,fnum++,fi);
+    PrintFrame(oregs,fnum++,fi, va_adjusted);
     if (NULL == fi)
       break; //can't unwind further
     fi->pc_to_match = va;
@@ -998,4 +1003,3 @@ EHFrame::getSize(UBYTE enc)
       return 8;
   }
 }
-

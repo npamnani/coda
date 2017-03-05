@@ -7,7 +7,11 @@
 
 #include "coda.h"
 #include "coda_ehframe.h"
+
+#ifdef CODA_DISASSEMBLY
 #include <dis-asm.h>
+#endif
+
 #include <stdarg.h>
 
 #ifdef CODA_DEBUG
@@ -353,11 +357,13 @@ CoreObject::ExtractProcessVitals()
       m_pr_ctx.m_prinfo = reinterpret_cast<elf_prpsinfo*>
                       (cptr + sizeof(ElfW(Nhdr)) + newnamesize);
     } 
+#ifdef NT_FILE
     else if (NT_FILE == nhdr->n_type)
     {
       m_nt_file_sec = cptr + sizeof(ElfW(Nhdr)) + newnamesize;
       m_found_nt_file = true;
     }
+#endif
     cptr += sizeof(ElfW(Nhdr)) + newnamesize + descnamesize;
   }
 }
@@ -744,6 +750,7 @@ int coda_fprintf (void *, const char* format, ...)
   return rc;
 }
 
+#ifdef CODA_DISASSEMBLY
 void start_disassembly(uint64_t start_va, 
                             uint64_t end_va, 
                                 disassemble_info *pdinfo,
@@ -773,6 +780,7 @@ void start_disassembly(uint64_t start_va,
     va += size;
   }
 }
+#endif
 
 void
 CoreObject::SwitchToThread(size_t threadno)
@@ -810,6 +818,10 @@ void
 CoreObject::ShowDisassembly(uint64_t va)
 {
 
+#ifndef CODA_DISASSEMBLY
+  std::cout << "Disassembly not enabled, "
+                "recompile coda with CODA_DISASSEMBLY macro\n";
+#else
   EHFrame eh(this, m_corefile);
 
   FrameInfo *fi = eh.FindFrameInfo(va);
@@ -850,6 +862,7 @@ CoreObject::ShowDisassembly(uint64_t va)
  
   start_disassembly(fi->pc,fi->pc_end, &dinfo, m_interactive_mode);
   delete [] buff;
+#endif
 }
 
 void
