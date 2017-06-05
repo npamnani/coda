@@ -108,6 +108,8 @@ class CoreObject {
       }
     }
 
+    int  CorePhdrNum() {return m_core_phdr_num;}
+    void Check4PN_XNUM();
     void ExtractPhdrs();
     void ExtractProcessVitals();
     void ExtractSharedLibraries();
@@ -140,6 +142,7 @@ class CoreObject {
     char *m_commandline;
     char *m_nt_file_sec;
     unsigned m_current_thread;
+    int m_core_phdr_num;
     bool m_pthreads;
     bool m_mini_dump;
     bool m_demangle;

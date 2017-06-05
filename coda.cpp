@@ -31,6 +31,23 @@ CoreObject::GetCoreObject(char const *cfname)
   return cobj;
 }
 
+void
+CoreObject::Check4PN_XNUM()
+{
+#ifdef PN_XNUM
+  ElfW(Shdr) shdr4xnum;
+  if (m_core_ehdr.e_phnum == PN_XNUM)
+  {
+    m_corefile >> File::Offset(m_core_ehdr.e_shoff) >> shdr4xnum;
+    m_core_phdr_num = shdr4xnum.sh_info;
+  }
+  else
+#endif
+  {
+    m_core_phdr_num = m_core_ehdr.e_phnum;
+  }
+}
+
 CoreObject::CoreObject(char const *cfname):m_corefile(cfname),
                                            m_current_thread(1),
                                            m_pthreads(false),
@@ -46,6 +63,7 @@ CoreObject::CoreObject(char const *cfname):m_corefile(cfname),
   }
   CheckArch();
   IsCoreFile();
+  Check4PN_XNUM();
   ExtractPhdrs();
   ExtractProcessVitals();
   ExtractSharedLibraries();
@@ -371,13 +389,13 @@ CoreObject::ExtractProcessVitals()
 void 
 CoreObject::ExtractPhdrs()
 {
-  ElfW(Phdr) * phdr_arr   = new ElfW(Phdr)[m_core_ehdr.e_phnum];
+  ElfW(Phdr) * phdr_arr   = new ElfW(Phdr)[CorePhdrNum()];
 
   m_corefile >> File::Offset(m_core_ehdr.e_phoff) 
-                   >> File::Units(m_core_ehdr.e_phnum) >> phdr_arr;
+                   >> File::Units(CorePhdrNum()) >> phdr_arr;
 
   bool not_mini_dump = true;
-  for (unsigned ndx = 0; ndx < m_core_ehdr.e_phnum; ++ndx)
+  for (int ndx = 0; ndx < CorePhdrNum(); ++ndx)
   {
     if ( not_mini_dump 
          && 
@@ -422,7 +440,7 @@ CoreObject::ExtractPhdrs()
     ++phdr_arr;
   }
  
-  m_mini_dump = (m_core_ehdr.e_phnum < 2) ? true : !not_mini_dump; 
+  m_mini_dump = (CorePhdrNum() < 2) ? true : !not_mini_dump; 
 }
 
 CoreObject::ObjectEntry *
