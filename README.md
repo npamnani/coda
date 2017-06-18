@@ -26,8 +26,7 @@ For furter info 'man core'.
     $> apt-get install binutils-dev #for opcodes library
     $> make
 
-Help
-------
+## Help
     $> ./coda
     Argument Missing, provide (corefile)
 
@@ -69,22 +68,22 @@ Help
     q          - Exit program.
 
 
-###For better backtrace, compile the binary with -rdynamic compiler flag and then generate the coredump.
+### For better backtrace, compile the binary with -rdynamic compiler flag and then generate the coredump.
 
 Some time back I posted an answer on stackoverflow in response to a question - [get-backtrace-from-core-file-without-gdb](http://stackoverflow.com/questions/22461254/get-backtrace-from-core-file-without-gdb).
 
-##How to extract backtrace from core dump 
+## How to extract backtrace from core dump 
  
 Getting a backtrace from a core file is very much architecture and OS specific, if you plan to extract it all by yourself. 
 gdb is a portable program which works on multiple architectures. 
 
-###gdb uses two techniques to extract the backtrace from coredump - 
+### gdb uses two techniques to extract the backtrace from coredump - 
     
 * Following the link list of frame pointer (ebp in case of x86 architecture). 
 * Using the exception handling frame work to do virtual unwinding. gdb requires binaries to extract the backtrace from coredump. 
    Since binaries contains information, how to start the virtual unwinding.
 
-###After this point my answer is specific to linux-x86_64 architecture.
+### After this point my answer is specific to linux-x86_64 architecture.
 
 Using the frame pointer i.e. rbp does not work when it comes to extracting backtrace reliably 
 if frame pointer is omitted or it is optimized program. On _x86\_64 architecture, compilers e.g. gcc_ emits 
