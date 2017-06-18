@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <ctype.h>
 
 #define LINE_LEN  1024
 #define MAX_HIST_SIZE 2000

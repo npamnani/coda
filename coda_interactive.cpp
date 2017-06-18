@@ -348,9 +348,9 @@ void handle_input(CoreObject *co, char *str)
   int   argc = 0;
   char *argv[MAX_ARGS] = {0};
 
+  char *saveptr;
   for( ;argc < MAX_ARGS - 1; ++argc,str = NULL)
   {
-    char *saveptr;
     argv[argc] = coda_strtok(str,&saveptr);
     if (argv[argc] == NULL)
       break;
